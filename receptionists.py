@@ -3,10 +3,19 @@ import anthropic
 import os
 from dotenv import load_dotenv
 load_dotenv()
+import csv
+import json
+from datetime import datetime
+import smtplib
+from email.message import EmailMessage
+
+
 
 
 app = Flask(__name__)
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 BUSINESS_INFO = """
 You are a friendly receptionist for Smile Dental Clinic.
 
@@ -19,7 +28,8 @@ Clinic information:
 Your job:
 - Answer questions politely and briefly
 - Help book appointments
-- If someone wants to book, ask for their name, preferred day, and phone number
+- If someone wants to book, ask for their name, preferred day,  phone number, and email address for confirmation
+-Once you have all the details,let them know their request has been received and a confirmation email will be sent
 - Keep replies short and warm, like a real receptionist on the phone
 """
 
@@ -55,6 +65,7 @@ HTML = """
 </html>
 """
 conversation=[]
+booking_done = False
 
 @app.route("/",methods=["GET","POST"])
 def index():
@@ -77,6 +88,17 @@ def index():
 
             ai_reply = message.content[0].text
             conversation.append({"role": "ai","text":ai_reply})
+            global booking_done
+            if not booking_done:
+                booking= extract_booking()
+                if booking and booking.get("complete"):
+                    save_booking(booking)
+                    send_confirmation(booking)
+                    booking_done= True
+                    print("Booking saved:",booking)
+
+
+
 
 
         except Exception as e:
@@ -85,6 +107,85 @@ def index():
 
         return redirect(url_for("index"))
     return render_template_string(HTML,history=conversation)
+def extract_booking():
+    extract_prompt="""Read the conversation and extract the booking details.
+    Return ONLY a JSON object,no other text, in exactly this format:
+    {"name":"","day": "","time": "","phone":"","email":"","service":"","complete":false}
+    Set "complete" to true ONLY if name,day,time and phone are all present.
+    Leave any missing field as an empty string."""
+
+    result = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        system=extract_prompt,
+
+        messages=[{"role": "user",
+        "content":"Here is the conversation:\n\n"+
+        "\n".join(f'{m["role"]}:{m["text"]}' for m in conversation)}]
+
+    )
+
+    raw = result.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        print("Could not parse JSON:",raw)
+        return None
+
+def send_confirmation(booking):
+    if not booking.get("email"):
+        return
+    msg = EmailMessage()
+    msg["Subject"]="Your appointment at Smile Dental Clinic"
+    msg["From"]= GMAIL_ADDRESS
+    msg["To"]= booking["email"]
+    msg.set_content(
+        f""" Hi {booking["name"]},
+        
+    Your appointment request has been received:
+    
+    Day: {booking["day"]}
+    Time: {booking["time"]}
+    service: {booking["service"]}
+    
+    We'll see you at 123 Main Street,Toronto.
+    
+    Smile Dental  Clinic"""
+    )
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(GMAIL_ADDRESS,GMAIL_APP_PASSWORD)
+            smtp.send_message(msg)
+        print("Confirmation email sent to ",booking["email"])
+    except Exception as e:
+        print("Email could not be sent:",e)
+
+
+
+
+
+    
+    
+    
+def save_booking(booking):
+    booking["timestamp"]=datetime.now().strftime("%Y-%m-%d %H:%M")
+    fields=["timestamp","name","day","time","phone","email","service"]
+    file_exists= os.path.exists("bookings.csv")
+
+    with open("bookings.csv","a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({key:booking.get(key,"") for key in fields
+                         })
+
 
 
 
@@ -92,7 +193,10 @@ def index():
 
 @app.route("/reset")
 def reset():
+    global booking_done
+
     conversation.clear()
+    booking_done = False
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
