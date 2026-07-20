@@ -9,6 +9,7 @@ from datetime import datetime
 import smtplib
 from email.message import EmailMessage
 
+from twilio.twiml.voice_response import VoiceResponse, Gather
 
 
 
@@ -32,6 +33,28 @@ Your job:
 -Once you have all the details,let them know their request has been received and a confirmation email will be sent
 - Keep replies short and warm, like a real receptionist on the phone
 """
+
+
+
+
+VOICE_INFO = BUSINESS_INFO +"""
+
+This is a phone call, not a text chat, not a text chat.
+-Speak in plain sentences only.No markdown, no asterisks, no bullet points, no numbered lists, no emoji.
+-keep every reply to one or two sentences.
+-Read phone numbers and emails back slowly to confirm you heard them correctly.
+
+
+
+
+
+
+"""
+
+
+
+
+
 
 HTML = """
 <!DOCTYPE html>
@@ -107,6 +130,50 @@ def index():
 
         return redirect(url_for("index"))
     return render_template_string(HTML,history=conversation)
+
+@app.route("/voice",methods=["POST"])
+def voice():
+    response = VoiceResponse()
+    gather = Gather(input="speech",action="/respond",method="POST",speech_timeout="auto")
+    gather.say("Thank you for calling Smile Dental Clinic.How can I help you today?")
+    response.append(gather)
+    return str(response)
+
+@app.route("/respond",methods=["POST"])
+def respond():
+    caller_speech = request.form.get("SpeechResult", "").strip()
+
+    response = VoiceResponse()
+
+    if not caller_speech:
+        response.say("Sorry, I don't understand you. Goodbye.")
+        response.hangup()
+        return str(response)
+
+    conversation.append({"role":"user","text":caller_speech})
+
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=300,
+            system=VOICE_INFO,
+            messages=[{"role":m["role"] if m["role"] =="user" else "assistant",
+                     "content": m["text"]} for m in conversation]
+
+
+        )
+        ai_reply = message.content[0].text
+        conversation.append({"role":"ai","text":ai_reply})
+    except Exception as e:
+        conversation.pop()
+        print("API error",e)
+        ai_reply="Sorry,something went wrong.Please try again later."
+    gather = Gather(input="speech",action="/respond",method="POST",speech_timeout="auto")
+    gather.say(ai_reply)
+    response.append(gather)
+    return str(response)
+
+
 def extract_booking():
     extract_prompt="""Read the conversation and extract the booking details.
     Return ONLY a JSON object,no other text, in exactly this format:
