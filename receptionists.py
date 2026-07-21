@@ -10,6 +10,7 @@ import smtplib
 from email.message import EmailMessage
 
 from twilio.twiml.voice_response import VoiceResponse, Gather
+import sqlite3
 
 
 
@@ -115,9 +116,11 @@ def index():
             if not booking_done:
                 booking= extract_booking()
                 if booking and booking.get("complete"):
+                    booking_done = True
+
                     save_booking(booking)
                     send_confirmation(booking)
-                    booking_done= True
+                    
                     print("Booking saved:",booking)
 
 
@@ -235,6 +238,42 @@ def send_confirmation(booking):
         print("Email could not be sent:",e)
 
 
+def init_db():
+    conn = sqlite3.connect("bookings.db")
+    conn.execute("""
+     CREATE TABLE IF NOT EXISTS bookings(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp  TEXT,
+        name TEXT,
+        time TEXT,
+        day TEXT,
+        phone TEXT,
+        email TEXT,
+        service TEXT,
+        status TEXT DEFAULT 'new'
+    )
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+""")
+    conn.commit()
+    conn.close()
+
+
+
+
+
+
+
 
 
 
@@ -253,6 +292,38 @@ def save_booking(booking):
         writer.writerow({key:booking.get(key,"") for key in fields
                          })
 
+    conn = sqlite3.connect("bookings.db")
+    conn.execute("""
+    INSERT INTO bookings(timestamp,name,day,time,phone,email,service)
+    VALUES (?,?,?,?,?,?,?)
+    
+    
+    
+    """,(
+
+    booking.get("timestamp",""),
+    booking.get("name",""),
+    booking.get("day",""),
+    booking.get("time",""),
+    booking.get("phone",""),
+    booking.get("email",""),
+    booking.get("service","")
+    ))
+    conn.commit()
+    conn.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -267,4 +338,5 @@ def reset():
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
+    init_db()
     app.run(debug=True,port=5001)
