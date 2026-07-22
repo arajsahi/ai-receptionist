@@ -72,6 +72,7 @@ HTML = """
   .ai span { background: #ecf0f1; padding: 8px 14px; border-radius: 12px; display: inline-block; }
   input[type=text] { width: 75%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
   button { background: #2c3e50; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
+ 
 </style>
 </head>
 <body>
@@ -81,16 +82,89 @@ HTML = """
     <div class="{{ msg.role }}"><span>{{ msg.text }}</span></div>
   {% endfor %}
 </div>
-<form method="POST">
+<form method="POST" onsubmit="this.querySelector('button').disabled=true">
   <input type="text" name="message" placeholder="Type your message..." autofocus>
   <button type="submit">Send</button>
 </form>
 </body>
 </html>
 """
+BOOKINGS_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<title>Bookings - Smile Dental</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 1000px; margin: 40px auto; background: #f5f5f5; padding: 20px; }
+  h1 { color: #2c3e50; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+  th { background: #2c3e50; color: white; padding: 12px; text-align: left; font-size: 14px; }
+  td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .new { color: #e67e22; font-weight: bold; }
+  .confirmed { color: #27ae60; font-weight: bold; }
+  .cancelled { color: #c0392b; font-weight: bold; }
+  .empty { background: white; padding: 40px; text-align: center; color: #888; border-radius: 8px; }
+  button { border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: white; font-size: 13px; }
+  .ok { background: #27ae60; }
+  .no { background: #c0392b; }
+</style>
+</head>
+<body>
+<h1>Bookings</h1>
+{% if bookings %}
+<table>
+  <tr>
+    <th>Received</th><th>Name</th><th>Day</th><th>Time</th>
+    <th>Phone</th><th>Service</th><th>Status</th><th>Actions</th>
+  </tr>
+  {% for b in bookings %}
+  <tr>
+    <td>{{ b["timestamp"] }}</td>
+    <td>{{ b["name"] }}</td>
+    <td>{{ b["day"] }}</td>
+    <td>{{ b["time"] }}</td>
+    <td>{{ b["phone"] }}</td>
+    <td>{{ b["service"] }}</td>
+    <td class="{{ b['status'] }}">{{ b["status"] }}</td>
+    <td>
+      <form method="POST" action="/bookings/{{ b['id'] }}/confirmed" style="display:inline">
+        <button class="ok">Confirm</button>
+      </form>
+      <form method="POST" action="/bookings/{{ b['id'] }}/cancelled" style="display:inline">
+        <button class="no">Cancel</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No bookings yet.</div>
+{% endif %}
+</body>
+</html>
+"""
+
 conversation=[]
 booking_done = False
 
+@app.route("/bookings")
+def bookings():
+    conn = sqlite3.connect("bookings.db")
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()
+    conn.close()
+    return render_template_string(BOOKINGS_HTML, bookings=rows)
+@app.route("/bookings/<int:bookings_id>/<status>",methods=["POST"])
+def booking(bookings_id,status):
+    if status not in ("confirmed","cancelled"):
+        return redirect(url_for("bookings"))
+    conn = sqlite3.connect("bookings.db")
+    conn.execute("UPDATE bookings SET status=? WHERE id=?",(status,bookings_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("bookings"))
+
+    
 @app.route("/",methods=["GET","POST"])
 def index():
     if request.method == "POST":
