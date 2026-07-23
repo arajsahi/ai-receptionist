@@ -107,15 +107,25 @@ BOOKINGS_HTML = """
   button { border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: white; font-size: 13px; }
   .ok { background: #27ae60; }
   .no { background: #c0392b; }
+  .filters { margin-bottom: 15px; }
+  .filters a { display: inline-block; padding: 8px 16px; margin-right: 6px; background: white; color: #2c3e50; text-decoration: none; border-radius: 6px; font-size: 14px; }
+  .filters a.active { background: #2c3e50; color: white; }
 </style>
 </head>
 <body>
+
 <h1>Bookings</h1>
+<div class="filters">
+  <a href="/bookings" class="{{ 'active' if current == 'all' }}">All</a>
+  <a href="/bookings?status=new" class="{{ 'active' if current == 'new' }}">New</a>
+  <a href="/bookings?status=confirmed" class="{{ 'active' if current == 'confirmed' }}">Confirmed</a>
+  <a href="/bookings?status=cancelled" class="{{ 'active' if current == 'cancelled' }}">Cancelled</a>
+</div>
 {% if bookings %}
 <table>
   <tr>
     <th>Received</th><th>Name</th><th>Day</th><th>Time</th>
-    <th>Phone</th><th>Service</th><th>Status</th><th>Actions</th>
+    <th>Phone</th><th>Email</th><th>Service</th><th>Status</th><th>Actions</th>
   </tr>
   {% for b in bookings %}
   <tr>
@@ -124,6 +134,7 @@ BOOKINGS_HTML = """
     <td>{{ b["day"] }}</td>
     <td>{{ b["time"] }}</td>
     <td>{{ b["phone"] }}</td>
+    <td>{{ b["email"] }}</td>
     <td>{{ b["service"] }}</td>
     <td class="{{ b['status'] }}">{{ b["status"] }}</td>
     <td>
@@ -149,11 +160,18 @@ booking_done = False
 
 @app.route("/bookings")
 def bookings():
+    status_filter = request.args.get("status","all")
     conn = sqlite3.connect("bookings.db")
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()
+    if status_filter in ("new","confirmed","cancelled"):
+        rows = conn.execute("SELECT * FROM bookings WHERE status = ? ORDER BY  id DESC",
+        (status_filter,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()
     conn.close()
-    return render_template_string(BOOKINGS_HTML, bookings=rows)
+    return render_template_string(BOOKINGS_HTML, bookings= rows, current= status_filter)
+
 @app.route("/bookings/<int:bookings_id>/<status>",methods=["POST"])
 def booking(bookings_id,status):
     if status not in ("confirmed","cancelled"):
