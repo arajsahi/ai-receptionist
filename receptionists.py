@@ -11,6 +11,10 @@ from email.message import EmailMessage
 
 from twilio.twiml.voice_response import VoiceResponse, Gather
 import sqlite3
+from functools import wraps
+DASHBOARD_USER=os.getenv('DASHBOARD_USER')
+DASHBOARD_PASSWORD=os.getenv("DASHBOARD_PASSWORD")
+
 
 
 
@@ -157,8 +161,23 @@ BOOKINGS_HTML = """
 
 conversation=[]
 booking_done = False
+def check_auth(username, password):
+    return username == DASHBOARD_USER and password == DASHBOARD_PASSWORD
+
+def require_auth(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return ("Access denied", 401,
+                    {"WWW-Authenticate":'Basic realm="Bookings"'})
+        return f(*args, **kwargs)
+    return wrapper
+
+
 
 @app.route("/bookings")
+@require_auth
 def bookings():
     status_filter = request.args.get("status","all")
     conn = sqlite3.connect("bookings.db")
@@ -173,6 +192,7 @@ def bookings():
     return render_template_string(BOOKINGS_HTML, bookings= rows, current= status_filter)
 
 @app.route("/bookings/<int:bookings_id>/<status>",methods=["POST"])
+@require_auth
 def booking(bookings_id,status):
     if status not in ("confirmed","cancelled"):
         return redirect(url_for("bookings"))
