@@ -35,8 +35,9 @@ Your job:
 - Answer questions politely and briefly
 - Help book appointments
 - If someone wants to book, ask for their name, preferred day,  phone number, and email address for confirmation
--Once you have all the details,let them know their request has been received and a confirmation email will be sent
-- Keep replies short and warm, like a real receptionist on the phone
+- Once you have all the details, tell them their request has been received and the clinic will follow up shortly to confirm the appointment.
+- Never tell them the appointment is booked or confirmed. You cannot see the appointment book, so you cannot promise a slot.
+
 """
 
 
@@ -197,9 +198,14 @@ def booking(bookings_id,status):
     if status not in ("confirmed","cancelled"):
         return redirect(url_for("bookings"))
     conn = sqlite3.connect("bookings.db")
+    conn.row_factory= sqlite3.Row
     conn.execute("UPDATE bookings SET status=? WHERE id=?",(status,bookings_id))
     conn.commit()
+    row = conn.execute("SELECT * FROM bookings WHERE id=?",(bookings_id,)).fetchone()
     conn.close()
+    if row:
+        send_status_email(dict(row),status)
+
     return redirect(url_for("bookings"))
 
     
@@ -348,6 +354,44 @@ def send_confirmation(booking):
         print("Confirmation email sent to ",booking["email"])
     except Exception as e:
         print("Email could not be sent:",e)
+
+def send_status_email(booking,status):
+    if not booking.get("email"):
+        return
+    msg = EmailMessage()
+    msg["From"]= GMAIL_ADDRESS
+    msg["TO"]=booking["email"]
+
+    if status == "confirmed":
+        msg["subject"]="Your appointment is confirmed -Smile Dental Clinic"
+        msg.set_content(
+            f"""HI {booking['name']},
+            Your appointment is now confirmed:
+            Day: {booking['day']}
+            Time: {booking['time']}
+            service: {booking['service']}
+            
+    We'll see you at 123 Main Street,Toronto.
+    
+    Smile Dental Clinic"""
+        )
+    else:
+        msg["Subject"] = "About your appointment - Smile Dental Clinic"
+        msg.set_content(
+            f""" Hi {booking['name']}'
+    Unfortunately, we can't offer the slot you requested for {booking['day']} at {booking['time']}.
+    Please call us to arrange another time.
+    Smile Dental  Clinic"""
+        )
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com",465) as smtp:
+            smtp.login(GMAIL_ADDRESS,GMAIL_APP_PASSWORD)
+            smtp.send_message(msg)
+        print(f"Status email {status} sent to ",booking["email"])
+    except Exception as e:
+        print("Email could not be sent:",e)
+            
 
 
 def init_db():
