@@ -14,6 +14,9 @@ import sqlite3
 from functools import wraps
 DASHBOARD_USER=os.getenv('DASHBOARD_USER')
 DASHBOARD_PASSWORD=os.getenv("DASHBOARD_PASSWORD")
+from google.oauth2 import  service_account
+from googleapiclient.discovery import build
+
 
 
 
@@ -205,6 +208,8 @@ def booking(bookings_id,status):
     conn.close()
     if row:
         send_status_email(dict(row),status)
+        if status == "confirmed":
+            add_to_calendar(dict(row))
 
     return redirect(url_for("bookings"))
 
@@ -391,6 +396,38 @@ def send_status_email(booking,status):
         print(f"Status email {status} sent to ",booking["email"])
     except Exception as e:
         print("Email could not be sent:",e)
+
+
+def add_to_calendar(booking):
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            "calendar-key.json",
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        service = build("calendar", "v3", credentials=creds)
+        summary =f"{booking['service']} -{booking['name']}"
+        description = (
+            f"Phone:{booking['phone']}\n"
+            f"Email:{booking['email']}\n"
+            f"Requested day:{booking['day']}"
+            f"Requested time:{booking['time']}"
+
+        )
+
+        event = {
+            "summary": summary,
+            "description": description,
+            "start":{"date": datetime.now().strftime("%Y-%m-%d") },
+            "end":{"date": datetime.now().strftime("%Y-%m-%d") },
+        }
+        service.events().insert(calendarId=GMAIL_ADDRESS,body=event).execute()
+        print("Added to calendar:",summary)
+    except Exception as e:
+        print("Calendar add failed:",e)
+
+
+
+
             
 
 
