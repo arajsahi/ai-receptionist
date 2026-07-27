@@ -40,6 +40,8 @@ Your job:
 - If someone wants to book, ask for their name, preferred day,  phone number, and email address for confirmation
 - Once you have all the details, tell them their request has been received and the clinic will follow up shortly to confirm the appointment.
 - Never tell them the appointment is booked or confirmed. You cannot see the appointment book, so you cannot promise a slot.
+- Only book service we offer: check-ups, nonsense, or rude messages. Don't play along with the pranks; steer back to helping with a dental
+  appointment.
 
 """
 
@@ -301,11 +303,29 @@ def respond():
 
 
 def extract_booking():
-    extract_prompt="""Read the conversation and extract the booking details.
-    Return ONLY a JSON object,no other text, in exactly this format:
-    {"name":"","day": "","time": "","phone":"","email":"","service":"","complete":false}
-    Set "complete" to true ONLY if name,day,time and phone are all present.
-    Leave any missing field as an empty string."""
+    extract_prompt =""" Read the conversation and extract the booking details.
+    Return ONLY a raw JSON object, no markdown, no code fences, in exactly this format:
+    {"name":"","day":"","time":"","phone":"","email":"","service":,"complete":false}
+    
+    
+    Rules:
+    - Extract EVERY field the customer has provided anywhere in the conversation, even if given all at once or out of order.
+    - phone: keep only the digits the customer gave,as a string.
+    - service: if they mention more than one service,join them(e.g. "Filling and Whitening").
+    - email: capture any email address mentioned anywhere in the conversation.
+    - Set "complete" to true ONLY if name, day , time, and phone are all present.
+    - Leave any missing field as an empty string.
+    - Only set "complete" true for a genuine request for a service this clinic offers(check-ups,cleaning,fillings,whitening).If the service is unrelated, nonsensical, or 
+      no a real dental booking, leave "complete" false and "service"empty.
+    
+    
+    
+    """
+
+
+
+
+    
 
     result = client.messages.create(
         model="claude-sonnet-4-6",
