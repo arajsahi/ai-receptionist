@@ -303,9 +303,13 @@ def respond():
 
 
 def extract_booking():
-    extract_prompt =""" Read the conversation and extract the booking details.
+    today = datetime.now().strftime("%A,%Y-%m-%d")
+
+    extract_prompt =f""" Today is {today}. Read the conversation and extract the booking details.
+    
+    
     Return ONLY a raw JSON object, no markdown, no code fences, in exactly this format:
-    {"name":"","day":"","time":"","phone":"","email":"","service":,"complete":false}
+    {{"name":"","day":"","time":"","date":"",phone":"","email":"","service":"","complete":false}}
     
     
     Rules:
@@ -317,6 +321,7 @@ def extract_booking():
     - Leave any missing field as an empty string.
     - Only set "complete" true for a genuine request for a service this clinic offers(check-ups,cleaning,fillings,whitening).If the service is unrelated, nonsensical, or 
       no a real dental booking, leave "complete" false and "service"empty.
+    - date: work out the actual calendar date from today's date above , as YYYY_MM_DD.
     
     
     
@@ -433,12 +438,14 @@ def add_to_calendar(booking):
             f"Requested time:{booking['time']}"
 
         )
+        event_date =  booking.get("date") or datetime.now().strftime("%Y-%m-%d")
+
 
         event = {
             "summary": summary,
             "description": description,
-            "start":{"date": datetime.now().strftime("%Y-%m-%d") },
-            "end":{"date": datetime.now().strftime("%Y-%m-%d") },
+            "start":{"date": event_date },
+            "end":{"date": event_date },
         }
         service.events().insert(calendarId=GMAIL_ADDRESS,body=event).execute()
         print("Added to calendar:",summary)
@@ -459,6 +466,7 @@ def init_db():
         timestamp  TEXT,
         name TEXT,
         time TEXT,
+        date TEXT,
         day TEXT,
         phone TEXT,
         email TEXT,
@@ -507,8 +515,8 @@ def save_booking(booking):
 
     conn = sqlite3.connect("bookings.db")
     conn.execute("""
-    INSERT INTO bookings(timestamp,name,day,time,phone,email,service)
-    VALUES (?,?,?,?,?,?,?)
+    INSERT INTO bookings(timestamp,name,day,time,date,phone,email,service)
+    VALUES (?,?,?,?,?,?,?,?)
     
     
     
@@ -518,6 +526,7 @@ def save_booking(booking):
     booking.get("name",""),
     booking.get("day",""),
     booking.get("time",""),
+    booking.get("date",""),
     booking.get("phone",""),
     booking.get("email",""),
     booking.get("service","")
