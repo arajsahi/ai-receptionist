@@ -42,7 +42,7 @@ Your job:
 - Never tell them the appointment is booked or confirmed. You cannot see the appointment book, so you cannot promise a slot.
 - Only book service we offer: check-ups, nonsense, or rude messages. Don't play along with the pranks; steer back to helping with a dental
   appointment.
-
+- When confirming the booking details back to the customer, state the actual calendar date (for example "Monday, August 4th"), not just the relative day like "next Monday", so there is no confusion about which date they mean.
 """
 
 
@@ -117,6 +117,8 @@ BOOKINGS_HTML = """
   button { border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: white; font-size: 13px; }
   .ok { background: #27ae60; }
   .no { background: #c0392b; }
+  .clash { background: #c0392b; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+  
   .filters { margin-bottom: 15px; }
   .filters a { display: inline-block; padding: 8px 16px; margin-right: 6px; background: white; color: #2c3e50; text-decoration: none; border-radius: 6px; font-size: 14px; }
   .filters a.active { background: #2c3e50; color: white; }
@@ -135,7 +137,7 @@ BOOKINGS_HTML = """
 <table>
   <tr>
     <th>Received</th><th>Name</th><th>Day</th><th>Time</th>
-    <th>Phone</th><th>Email</th><th>Service</th><th>Status</th><th>Actions</th>
+    <th>Phone</th><th>Email</th><th>Service</th><th>Status</th><th>Slot</th><th>Actions</th>
   </tr>
   {% for b in bookings %}
   <tr>
@@ -147,6 +149,7 @@ BOOKINGS_HTML = """
     <td>{{ b["email"] }}</td>
     <td>{{ b["service"] }}</td>
     <td class="{{ b['status'] }}">{{ b["status"] }}</td>
+    <td>{% if b["slot_note"] == "CLASH" %}<span class="clash">⚠ CLASH</span>{% endif %}</td>
     <td>
       <form method="POST" action="/bookings/{{ b['id'] }}/confirmed" style="display:inline">
         <button class="ok">Confirm</button>
@@ -179,6 +182,20 @@ def require_auth(f):
                     {"WWW-Authenticate":'Basic realm="Bookings"'})
         return f(*args, **kwargs)
     return wrapper
+
+def is_slot_taken(date,time):
+    if not date or not time:
+        return False
+    conn=sqlite3.connect("bookings.db")
+    count = conn.execute("SELECT COUNT(*) FROM bookings WHERE date=? AND time=? AND status != 'cancelled'",
+                         (date,time)
+                         ).fetchone()[0]
+    conn.close()
+    return count > 0
+
+
+
+
 
 
 
@@ -225,10 +242,11 @@ def index():
         conversation.append({"role":"user","text":user_message})
 
         try:
+            today = datetime.now().strftime("%A,%Y-%m,%d")
             message = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=300,
-                system=BUSINESS_INFO,
+                system= f"Today is {today}.\n\n" + BUSINESS_INFO,
                 messages=[{"role":m["role"] if m["role"] =="user" else "assistant",
                           "content":m["text"]} for m in conversation]
             )
@@ -281,10 +299,11 @@ def respond():
     conversation.append({"role":"user","text":caller_speech})
 
     try:
+        today = datetime.now().strftime("%A, %Y-%m-%d")
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=300,
-            system=VOICE_INFO,
+            system=f"Today is {today}.\n\n" + VOICE_INFO,
             messages=[{"role":m["role"] if m["role"] =="user" else "assistant",
                      "content": m["text"]} for m in conversation]
 
@@ -471,6 +490,7 @@ def init_db():
         phone TEXT,
         email TEXT,
         service TEXT,
+        slot_note TEXT,
         status TEXT DEFAULT 'new'
     )
     
@@ -502,7 +522,12 @@ def init_db():
     
     
 def save_booking(booking):
+
     booking["timestamp"]=datetime.now().strftime("%Y-%m-%d %H:%M")
+    if is_slot_taken(booking.get("date",""),booking.get("time","")):
+        booking["slot_note"]="CLASH"
+    else:
+        booking["slot_note"]=""
     fields=["timestamp","name","day","time","phone","email","service"]
     file_exists= os.path.exists("bookings.csv")
 
@@ -515,8 +540,8 @@ def save_booking(booking):
 
     conn = sqlite3.connect("bookings.db")
     conn.execute("""
-    INSERT INTO bookings(timestamp,name,day,time,date,phone,email,service)
-    VALUES (?,?,?,?,?,?,?,?)
+    INSERT INTO bookings(timestamp,name,day,time,date,phone,email,service, slot_note)
+    VALUES (?,?,?,?,?,?,?,?,?)
     
     
     
@@ -529,7 +554,8 @@ def save_booking(booking):
     booking.get("date",""),
     booking.get("phone",""),
     booking.get("email",""),
-    booking.get("service","")
+    booking.get("service",""),
+    booking.get("slot_note","")
     ))
     conn.commit()
     conn.close()
