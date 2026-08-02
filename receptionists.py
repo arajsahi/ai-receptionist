@@ -122,11 +122,27 @@ BOOKINGS_HTML = """
   .filters { margin-bottom: 15px; }
   .filters a { display: inline-block; padding: 8px 16px; margin-right: 6px; background: white; color: #2c3e50; text-decoration: none; border-radius: 6px; font-size: 14px; }
   .filters a.active { background: #2c3e50; color: white; }
+  
+  .stats { display: flex; gap: 12px; margin-bottom: 20px; }
+  .stat { flex: 1; background: white; border-radius: 8px; padding: 16px; }
+  .stat .n { font-size: 28px; font-weight: bold; color: #2c3e50; }
+  .stat .l { font-size: 12px; color: #888; margin-top: 4px; text-transform: uppercase; }
+  .stat.new .n { color: #e67e22; }
+  .stat.confirmed .n { color: #27ae60; }
+  .stat.cancelled .n { color: #c0392b; }
+  .day-header td { background: #eef2f4; color: #2c3e50; font-weight: bold; font-size: 15px; padding: 14px 12px; border-top: 2px solid #2c3e50; }
+  
 </style>
 </head>
 <body>
 
 <h1>Bookings</h1>
+<div class="stats">
+  <div class="stat total"><div class="n">{{ total }}</div><div class="l">Total</div></div>
+  <div class="stat new"><div class="n">{{ new_count }}</div><div class="l">New</div></div>
+  <div class="stat confirmed"><div class="n">{{ confirmed_count }}</div><div class="l">Confirmed</div></div>
+  <div class="stat cancelled"><div class="n">{{ cancelled_count }}</div><div class="l">Cancelled</div></div>
+</div>
 <div class="filters">
   <a href="/bookings" class="{{ 'active' if current == 'all' }}">All</a>
   <a href="/bookings?status=new" class="{{ 'active' if current == 'new' }}">New</a>
@@ -139,7 +155,10 @@ BOOKINGS_HTML = """
     <th>Received</th><th>Name</th><th>Day</th><th>Time</th>
     <th>Phone</th><th>Email</th><th>Service</th><th>Status</th><th>Slot</th><th>Actions</th>
   </tr>
-  {% for b in bookings %}
+  
+  {% for day, day_bookings in grouped.items() %}
+  <tr class="day-header"><td colspan="10">{{ day }} — {{ day_bookings|length }} request(s)</td></tr>
+  {% for b in day_bookings %}
   <tr>
     <td>{{ b["timestamp"] }}</td>
     <td>{{ b["name"] }}</td>
@@ -159,6 +178,7 @@ BOOKINGS_HTML = """
       </form>
     </td>
   </tr>
+  {% endfor %}
   {% endfor %}
 </table>
 {% else %}
@@ -211,8 +231,26 @@ def bookings():
         ).fetchall()
     else:
         rows = conn.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()
+    grouped ={}
+    for b in rows:
+        key =b["date"] if b["date"] else "No date"
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(b)
+    grouped = dict(sorted(grouped.items()))
+
+    all_statuses = conn.execute("SELECT * FROM bookings").fetchall()
+    total = len(all_statuses)
+    new_count = sum(1 for r in all_statuses if r["status"] == "new")
+    confirmed_count = sum(1 for r in all_statuses if r["status"] == "confirmed")
+    cancelled_count = sum(1 for r in all_statuses if r["status"] == "cancelled")
+
     conn.close()
-    return render_template_string(BOOKINGS_HTML, bookings= rows, current= status_filter)
+    return render_template_string(BOOKINGS_HTML, bookings= rows, current= status_filter,
+                                  total=total,new_count=new_count,confirmed_count=confirmed_count,cancelled_count=cancelled_count,
+                                  grouped=grouped,
+                                  )
+
 
 @app.route("/bookings/<int:bookings_id>/<status>",methods=["POST"])
 @require_auth
@@ -224,6 +262,8 @@ def booking(bookings_id,status):
     conn.execute("UPDATE bookings SET status=? WHERE id=?",(status,bookings_id))
     conn.commit()
     row = conn.execute("SELECT * FROM bookings WHERE id=?",(bookings_id,)).fetchone()
+
+
     conn.close()
     if row:
         send_status_email(dict(row),status)
