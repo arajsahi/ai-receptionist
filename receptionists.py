@@ -198,6 +198,7 @@ BOOKINGS_HTML = """
 """
 
 conversation=[]
+conversations={}
 booking_done = False
 def check_auth(username, password):
     return username == DASHBOARD_USER and password == DASHBOARD_PASSWORD
@@ -243,7 +244,7 @@ def bookings():
     grouped ={}
     for b in rows:
         if b["date"]:
-            key = datetime.strptime(b["date"],"%Y-%m-%d").strftime("%A,%b %d")
+            key = datetime.strptime(b["date"],"%Y-%m-%d").strftime("%A, %b %d")
         else:
             key = "No date"
 
@@ -332,6 +333,8 @@ def index():
 
 @app.route("/voice",methods=["POST"])
 def voice():
+    caller_number = request.form.get("From","unknown")
+    conversations[caller_number]=[]
     response = VoiceResponse()
     gather = Gather(input="speech",action="/respond",method="POST",speech_timeout="auto")
     gather.say("Thank you for calling Smile Dental Clinic.How can I help you today?")
@@ -341,6 +344,7 @@ def voice():
 @app.route("/respond",methods=["POST"])
 def respond():
     caller_speech = request.form.get("SpeechResult", "").strip()
+    caller_number = request.form.get("From","unknown")
 
     response = VoiceResponse()
 
@@ -348,6 +352,9 @@ def respond():
         response.say("Sorry, I don't understand you. Goodbye.")
         response.hangup()
         return str(response)
+    if caller_number not in conversations:
+        conversations[caller_number] = []
+    conversation = conversations[caller_number]
 
     conversation.append({"role":"user","text":caller_speech})
 
