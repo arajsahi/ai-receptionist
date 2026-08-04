@@ -108,31 +108,36 @@ BOOKINGS_HTML = """
 <title>Bookings - Smile Dental</title>
 <style>
   body { font-family: Arial, sans-serif; max-width: 1000px; margin: 40px auto; background: #f5f5f5; padding: 20px; }
-  h1 { color: #2c3e50; }
+  h1 { color: #0f7d8c; }
   table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
-  th { background: #2c3e50; color: white; padding: 12px; text-align: left; font-size: 14px; }
+  th { background: #0f7d8c; color: white; padding: 12px; text-align: left; font-size: 14px; }
   td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
   .new { color: #e67e22; font-weight: bold; }
   .confirmed { color: #27ae60; font-weight: bold; }
   .cancelled { color: #c0392b; font-weight: bold; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.new { background: #fdf1e0; color: #b26a00; }
+  .badge.confirmed { background: #e6f4ec; color: #1f7a45; }
+  .badge.cancelled { background: #eef1f2; color: #8a939a; }
   .empty { background: white; padding: 40px; text-align: center; color: #888; border-radius: 8px; }
   button { border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; color: white; font-size: 13px; }
   .ok { background: #27ae60; }
   .no { background: #c0392b; }
-  .clash { background: #c0392b; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+  .clash { background: #fcecea; color: #c0392b; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  
   
   .filters { margin-bottom: 15px; }
-  .filters a { display: inline-block; padding: 8px 16px; margin-right: 6px; background: white; color: #2c3e50; text-decoration: none; border-radius: 6px; font-size: 14px; }
-  .filters a.active { background: #2c3e50; color: white; }
+  .filters a { display: inline-block; padding: 8px 16px; margin-right: 6px; background: white; color: #0f7d8c; text-decoration: none; border-radius: 999px; font-size: 14px; 1px solid #e3e9ec; }
+  .filters a.active { background: #0f7d8c; color: white; }
   
   .stats { display: flex; gap: 12px; margin-bottom: 20px; }
   .stat { flex: 1; background: white; border-radius: 8px; padding: 16px; }
-  .stat .n { font-size: 28px; font-weight: bold; color: #2c3e50; }
+  .stat .n { font-size: 28px; font-weight: bold; color: #0f7d8c; }
   .stat .l { font-size: 12px; color: #888; margin-top: 4px; text-transform: uppercase; }
   .stat.new .n { color: #e67e22; }
   .stat.confirmed .n { color: #27ae60; }
   .stat.cancelled .n { color: #c0392b; }
-  .day-header td { background: #eef2f4; color: #2c3e50; font-weight: bold; font-size: 15px; padding: 14px 12px; border-top: 2px solid #2c3e50; }
+  .day-header td { background: #eef2f4; color: #0f7d8c; font-weight: bold; font-size: 15px; padding: 14px 12px; border-top: 2px solid #0f7d8c; }
   
 </style>
 </head>
@@ -170,7 +175,8 @@ BOOKINGS_HTML = """
     <td>{{ b["phone"] }}</td>
     <td>{{ b["email"] }}</td>
     <td>{{ b["service"] }}</td>
-    <td class="{{ b['status'] }}">{{ b["status"] }}</td>
+    
+    <td><span class="badge {{ b['status'] }}">{{ b["status"] }}</span></td>
     <td>{% if b["slot_note"] == "CLASH" %}<span class="clash">⚠ CLASH</span>{% endif %}</td>
     <td>
       <form method="POST" action="/bookings/{{ b['id'] }}/confirmed" style="display:inline">
