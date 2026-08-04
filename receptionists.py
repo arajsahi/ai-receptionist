@@ -16,6 +16,8 @@ DASHBOARD_USER=os.getenv('DASHBOARD_USER')
 DASHBOARD_PASSWORD=os.getenv("DASHBOARD_PASSWORD")
 from google.oauth2 import  service_account
 from googleapiclient.discovery import build
+from datetime import datetime
+
 
 
 
@@ -157,7 +159,8 @@ BOOKINGS_HTML = """
   </tr>
   
   {% for day, day_bookings in grouped.items() %}
-  <tr class="day-header"><td colspan="10">{{ day }} — {{ day_bookings|length }} request(s)</td></tr>
+  
+  <tr class="day-header"><td colspan="10">{{ day }} — {{ day_bookings|length }} requests · {{ day_bookings|selectattr("status", "equalto", "new")|list|length }} new</td></tr>
   {% for b in day_bookings %}
   <tr>
     <td>{{ b["timestamp"] }}</td>
@@ -233,7 +236,11 @@ def bookings():
         rows = conn.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()
     grouped ={}
     for b in rows:
-        key =b["date"] if b["date"] else "No date"
+        if b["date"]:
+            key = datetime.strptime(b["date"],"%Y-%m-%d").strftime("%A,%b %d")
+        else:
+            key = "No date"
+
         if key not in grouped:
             grouped[key] = []
         grouped[key].append(b)
@@ -381,6 +388,8 @@ def extract_booking():
     - Only set "complete" true for a genuine request for a service this clinic offers(check-ups,cleaning,fillings,whitening).If the service is unrelated, nonsensical, or 
       no a real dental booking, leave "complete" false and "service"empty.
     - date: work out the actual calendar date from today's date above , as YYYY_MM_DD.
+    -Always format "time" in 12-hour format with AM/PM or "4:30 PM". Always include minutes(":00 if none given) and a space before AM/PM ,midnight is "12:00 AM".
+    
     
     
     
