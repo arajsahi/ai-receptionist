@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect , url_for
+from flask import Flask, render_template_string, request, redirect , url_for , session
 import anthropic
 import os
 from dotenv import load_dotenv
@@ -24,6 +24,7 @@ from datetime import datetime
 
 
 app = Flask(__name__)
+app.secret_key="Arsenal_fc"
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
@@ -288,12 +289,16 @@ def booking(bookings_id,status):
 
     
 @app.route("/",methods=["GET","POST"])
+
 def index():
+    if "conversation" not in session:
+        session["conversation"] = []
     if request.method == "POST":
         user_message = request.form.get("message","").strip()
+
         if not user_message:
             return redirect(url_for("index"))
-        conversation.append({"role":"user","text":user_message})
+        session["conversation"].append({"role":"user","text":user_message})
 
         try:
             today = datetime.now().strftime("%A,%Y-%m,%d")
@@ -302,13 +307,13 @@ def index():
                 max_tokens=300,
                 system= f"Today is {today}.\n\n" + BUSINESS_INFO,
                 messages=[{"role":m["role"] if m["role"] =="user" else "assistant",
-                          "content":m["text"]} for m in conversation]
+                          "content":m["text"]} for m in session["conversation"]]
             )
 
 
 
             ai_reply = message.content[0].text
-            conversation.append({"role": "ai","text":ai_reply})
+            session["conversation"].append({"role": "ai","text":ai_reply})
             global booking_done
             if not booking_done:
                 booking= extract_booking()
@@ -325,11 +330,13 @@ def index():
 
 
         except Exception as e:
-            conversation.pop()
+            session["conversation"].pop()
             print("API error",e)
 
-        return redirect(url_for("index"))
-    return render_template_string(HTML,history=conversation)
+
+
+    session.modified = True
+    return render_template_string(HTML,history=session["conversation"])
 
 @app.route("/voice",methods=["POST"])
 def voice():
@@ -642,8 +649,9 @@ def save_booking(booking):
 @app.route("/reset")
 def reset():
     global booking_done
+    session["conversation"] =[]
 
-    conversation.clear()
+
     booking_done = False
     return redirect(url_for("index"))
 
