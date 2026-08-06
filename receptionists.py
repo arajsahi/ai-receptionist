@@ -291,6 +291,9 @@ def booking(bookings_id,status):
 @app.route("/",methods=["GET","POST"])
 
 def index():
+    if "booking_done" not in session:
+        session["booking_done"] = False
+
     if "conversation" not in session:
         session["conversation"] = []
     if request.method == "POST":
@@ -314,11 +317,12 @@ def index():
 
             ai_reply = message.content[0].text
             session["conversation"].append({"role": "ai","text":ai_reply})
-            global booking_done
-            if not booking_done:
-                booking= extract_booking()
+
+            if not session["booking_done"]:
+                booking= extract_booking(session["conversation"])
+
                 if booking and booking.get("complete"):
-                    booking_done = True
+                    session["booking_done"]= True
 
                     save_booking(booking)
                     send_confirmation(booking)
@@ -388,7 +392,7 @@ def respond():
     return str(response)
 
 
-def extract_booking():
+def extract_booking(conversation):
     today = datetime.now().strftime("%A,%Y-%m-%d")
 
     extract_prompt =f""" Today is {today}. Read the conversation and extract the booking details.
