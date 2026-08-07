@@ -214,6 +214,20 @@ def require_auth(f):
         return f(*args, **kwargs)
     return wrapper
 
+def get_booked_slots():
+    conn = sqlite3.connect("bookings.db")
+    rows = conn.execute(
+        "SELECT date, time FROM bookings WHERE status != 'cancelled' AND date >= date('now')"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+
+
+
+
+
 def is_slot_taken(date,time):
     if not date or not time:
         return False
@@ -304,11 +318,16 @@ def index():
         session["conversation"].append({"role":"user","text":user_message})
 
         try:
+            booked = get_booked_slots()
+            booked_text = "; ".join(f"{date} at {time}" for date, time in booked)
+            availability ="Currently booked slots (do not offer these; suggest alternatives): " + booked_text if booked_text else "No slots are booked yet."
             today = datetime.now().strftime("%A,%Y-%m,%d")
             message = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=300,
-                system= f"Today is {today}.\n\n" + BUSINESS_INFO,
+                system= f"Today is {today}.\n\n{availability}\n\n" + BUSINESS_INFO,
+
+
                 messages=[{"role":m["role"] if m["role"] =="user" else "assistant",
                           "content":m["text"]} for m in session["conversation"]]
             )
@@ -399,7 +418,7 @@ def extract_booking(conversation):
     
     
     Return ONLY a raw JSON object, no markdown, no code fences, in exactly this format:
-    {{"name":"","day":"","time":"","date":"",phone":"","email":"","service":"","complete":false}}
+    {{"name":"","day":"","time":"","date":"","phone":"","email":"","service":"","complete":false}}
     
     
     Rules:
@@ -411,7 +430,7 @@ def extract_booking(conversation):
     - Leave any missing field as an empty string.
     - Only set "complete" true for a genuine request for a service this clinic offers(check-ups,cleaning,fillings,whitening).If the service is unrelated, nonsensical, or 
       no a real dental booking, leave "complete" false and "service"empty.
-    - date: work out the actual calendar date from today's date above , as YYYY_MM_DD.
+    - date: work out the actual calendar date from today's date above , as YYYY-MM-DD.
     -Always format "time" in 12-hour format with AM/PM or "4:30 PM". Always include minutes(":00 if none given) and a space before AM/PM ,midnight is "12:00 AM".
     
     
@@ -652,11 +671,11 @@ def save_booking(booking):
 
 @app.route("/reset")
 def reset():
-    global booking_done
+
     session["conversation"] =[]
 
 
-    booking_done = False
+    session["booking_done"] = False
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
