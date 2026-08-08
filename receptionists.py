@@ -315,6 +315,11 @@ def index():
 
         if not user_message:
             return redirect(url_for("index"))
+        if session["booking_done"]:
+            session["conversation"]=[]
+            session["booking_done"]= False
+
+
         session["conversation"].append({"role":"user","text":user_message})
 
         try:
